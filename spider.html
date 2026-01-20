@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Spider Solitaire</title>
+<style>
+body {
+  margin: 0;
+  background: #0b6623;
+  font-family: Arial, sans-serif;
+  user-select: none;
+}
+
+#game {
+  padding: 20px;
+}
+
+.row {
+  display: flex;
+  gap: 10px;
+}
+
+.column {
+  width: 90px;
+  min-height: 140px;
+  position: relative;
+}
+
+.card {
+  width: 90px;
+  height: 130px;
+  border-radius: 6px;
+  position: absolute;
+  background: white;
+  border: 1px solid #333;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 20px;
+  cursor: grab;
+}
+
+.card.face-down {
+  background: #1e3a8a;
+  border: 1px solid #111;
+  cursor: default;
+}
+
+#stock {
+  margin-top: 20px;
+  width: 90px;
+  height: 130px;
+  background: #1e3a8a;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.completed {
+  margin-left: auto;
+  color: white;
+  font-size: 18px;
+}
+</style>
+</head>
+<body>
+
+<div id="game">
+  <div class="row" id="tableau"></div>
+
+  <div class="row" style="margin-top:20px; align-items:center;">
+    <div id="stock"></div>
+    <div class="completed" id="completed">Completed: 0</div>
+  </div>
+</div>
+
+<script>
+const tableau = document.getElementById("tableau");
+const stockEl = document.getElementById("stock");
+const completedEl = document.getElementById("completed");
+
+let columns = [];
+let stock = [];
+let completed = 0;
+let dragStack = null;
+let dragSource = null;
+
+const ranks = ["A","2","3","4","5","6","7","8","9","10","J","Q","K"];
+
+// Build deck (1 suit, 8 decks)
+let deck = [];
+for (let d = 0; d < 8; d++) {
+  for (let i = 0; i < 13; i++) {
+    deck.push({ rank: i, label: ranks[i], faceUp: false });
+  }
+}
+
+// Shuffle
+deck.sort(() => Math.random() - 0.5);
+
+// Create columns
+for (let i = 0; i < 10; i++) {
+  const col = document.createElement("div");
+  col.className = "column";
+  tableau.appendChild(col);
+  columns.push([]);
+}
+
+// Deal initial cards
+columns.forEach((col, i) => {
+  const count = i < 4 ? 6 : 5;
+  for (let j = 0; j < count; j++) {
+    const card = deck.pop();
+    card.faceUp = j === count - 1;
+    col.push(card);
+  }
+});
+
+// Remaining cards go to stock
+stock = deck;
+
+function render() {
+  columns.forEach((col, i) => {
+    const colEl = tableau.children[i];
+    colEl.innerHTML = "";
+    col.forEach((card, idx) => {
+      const el = document.createElement("div");
+      el.className = "card";
+      if (!card.faceUp) el.classList.add("face-down");
+      el.style.top = idx * 28 + "px";
+      if (card.faceUp) el.textContent = card.label;
+      el.onmousedown = () => tryDrag(i, idx);
+      colEl.appendChild(el);
+    });
+  });
+  completedEl.textContent = `Completed: ${completed}`;
+}
+
+function tryDrag(colIndex, cardIndex) {
+  const col = columns[colIndex];
+  if (!col[cardIndex].faceUp) return;
+
+  // Validate descending sequence
+  for (let i = cardIndex; i < col.length - 1; i++) {
+    if (col[i].rank !== col[i + 1].rank + 1) return;
+  }
+
+  dragStack = col.splice(cardIndex);
+  dragSource = colIndex;
+
+  document.onmouseup = drop;
+}
+
+function drop(e) {
+  document.onmouseup = null;
+
+  const target = document.elementFromPoint(e.clientX, e.clientY)?.closest(".column");
+  if (!target) {
+    columns[dragSource].push(...dragStack);
+    dragStack = null;
+    return render();
+  }
+
+  const targetIndex = [...tableau.children].indexOf(target);
+  const targetCol = columns[targetIndex];
+
+  if (
+    targetCol.length === 0 ||
+    targetCol[targetCol.length - 1].rank === dragStack[0].rank + 1
+  ) {
+    targetCol.push(...dragStack);
+    flipIfNeeded(dragSource);
+    checkComplete(targetIndex);
+  } else {
+    columns[dragSource].push(...dragStack);
+  }
+
+  dragStack = null;
+  render();
+}
+
+function flipIfNeeded(colIndex) {
+  const col = columns[colIndex];
+  if (col.length && !col[col.length - 1].faceUp) {
+    col[col.length - 1].faceUp = true;
+  }
+}
+
+function checkComplete(colIndex) {
+  const col = columns[colIndex];
+  if (col.length < 13) return;
+
+  const last13 = col.slice(-13);
+  for (let i = 0; i < 12; i++) {
+    if (last13[i].rank !== last13[i + 1].rank + 1) return;
+  }
+
+  col.splice(-13);
+  completed++;
+  flipIfNeeded(colIndex);
+}
+
+stockEl.onclick = () => {
+  if (stock.length < 10) return;
+  columns.forEach(col => {
+    const card = stock.pop();
+    card.faceUp = true;
+    col.push(card);
+  });
+  render();
+};
+
+render();
+</script>
+</body>
+</html>
